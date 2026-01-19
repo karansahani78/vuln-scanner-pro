@@ -37,6 +37,17 @@ public class User {
     private String fullName;
 
     private String organization;
+    @Column(name = "email_verified")
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verification_code")
+    @JsonIgnore
+    private String emailVerificationCode;
+
+    @Column(name = "email_verification_expiry")
+    @JsonIgnore
+    private LocalDateTime emailVerificationExpiry;
+
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))

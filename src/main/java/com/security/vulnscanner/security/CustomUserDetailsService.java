@@ -18,16 +18,26 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+    public UserDetails loadUserByUsername(String username)
+            throws UsernameNotFoundException {
+
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() ->
+                        new UsernameNotFoundException("User not found: " + username));
+
+        // 🚨 BLOCK LOGIN IF EMAIL NOT VERIFIED
+        if (!user.isEmailVerified()) {
+            throw new UsernameNotFoundException("Email not verified");
+        }
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
-                .authorities(user.getRoles().stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList()))
+                .authorities(
+                        user.getRoles().stream()
+                                .map(SimpleGrantedAuthority::new)
+                                .collect(Collectors.toList())
+                )
                 .accountExpired(false)
                 .accountLocked(!user.isActive())
                 .credentialsExpired(false)
