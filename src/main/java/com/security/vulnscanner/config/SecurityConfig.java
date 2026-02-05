@@ -4,6 +4,7 @@ import com.security.vulnscanner.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -43,9 +44,13 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
 
-                        // ✅ PUBLIC AUTH + OTP ENDPOINTS
+                        // 🔥 CRITICAL: Allow browser preflight
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // ✅ PUBLIC AUTH + OTP FLOW
                         .requestMatchers(
-                                "/api/auth/register/**",
+                                "/api/auth/register/request-code",
+                                "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/validate"
                         ).permitAll()
@@ -53,7 +58,7 @@ public class SecurityConfig {
                         // Optional tools
                         .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
 
-                        // 🔒 EVERYTHING ELSE REQUIRES JWT
+                        // 🔒 Everything else needs JWT
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider())
@@ -64,19 +69,17 @@ public class SecurityConfig {
     }
 
     /**
-     * ✅ SAFE CORS CONFIG
-     * - Works with frontend
-     * - JWT Authorization header allowed
+     * 🌍 CORS config for Lovable frontend
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOriginPatterns(List.of("*")); // frontend domains later
+        config.setAllowedOriginPatterns(List.of("*"));  // Change to frontend domain in prod
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(false); // ✅ IMPORTANT FIX
+        config.setAllowCredentials(false); // JWT in header, not cookies
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
