@@ -55,7 +55,7 @@ public class AuthController {
         user.setEmail(email);
         user.setEmailVerificationCode(code);
         user.setEmailVerificationExpiry(LocalDateTime.now().plusMinutes(10));
-        user.setActive(false);
+        user.setActive(true);
         user.setEmailVerified(false);
 
         userRepository.save(user);
@@ -111,6 +111,15 @@ public class AuthController {
     // ===============================
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody AuthRequest request) {
+
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+
+        if (!user.isEmailVerified()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Please verify your email before login"));
+        }
+
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -122,16 +131,13 @@ public class AuthController {
             UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
             String token = jwtUtil.generateToken(userDetails);
 
-            User user = userRepository.findByUsername(request.getUsername()).orElseThrow();
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("token", token);
-            response.put("type", "Bearer");
-            response.put("username", user.getUsername());
-            response.put("email", user.getEmail());
-            response.put("roles", user.getRoles());
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(Map.of(
+                    "token", token,
+                    "type", "Bearer",
+                    "username", user.getUsername(),
+                    "email", user.getEmail(),
+                    "roles", user.getRoles()
+            ));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Invalid username or password"));

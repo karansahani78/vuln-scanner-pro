@@ -10,7 +10,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.stream.Collectors;
-
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
@@ -25,11 +24,6 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found: " + username));
 
-        // 🚨 BLOCK LOGIN IF EMAIL NOT VERIFIED
-        if (!user.isEmailVerified()) {
-            throw new UsernameNotFoundException("Email not verified");
-        }
-
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
@@ -39,9 +33,9 @@ public class CustomUserDetailsService implements UserDetailsService {
                                 .collect(Collectors.toList())
                 )
                 .accountExpired(false)
-                .accountLocked(!user.isActive())
+                .accountLocked(false)
                 .credentialsExpired(false)
-                .disabled(!user.isActive())
+                .disabled(false) // 🔥 NEVER tie this to email verification
                 .build();
     }
 }
