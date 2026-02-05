@@ -26,6 +26,11 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(
+        origins = "*",
+        allowedHeaders = "*",
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS}
+)
 @RequiredArgsConstructor
 public class AuthController {
 
