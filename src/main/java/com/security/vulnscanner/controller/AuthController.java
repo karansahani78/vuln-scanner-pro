@@ -20,11 +20,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(
+        origins = "*",
+        allowedHeaders = "*",
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS}
+)
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -37,15 +43,12 @@ public class AuthController {
     private final OtpUtil otpUtil;
 
     // ===============================
-    // STEP 1: REQUEST OTP
+    // STEP 1: REQUEST EMAIL VERIFICATION CODE
     // ===============================
     @PostMapping("/register/request-code")
     public ResponseEntity<?> requestVerificationCode(@RequestBody Map<String, String> body) {
 
         String email = body.get("email");
-        if (email == null || email.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
-        }
 
         if (userRepository.existsByEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Email already exists"));
@@ -57,8 +60,8 @@ public class AuthController {
         user.setEmail(email);
         user.setEmailVerificationCode(code);
         user.setEmailVerificationExpiry(LocalDateTime.now().plusMinutes(10));
+        user.setActive(true);
         user.setEmailVerified(false);
-        user.setActive(false);
 
         userRepository.save(user);
         emailService.sendVerificationCode(email, code);
@@ -67,7 +70,7 @@ public class AuthController {
     }
 
     // ===============================
-    // STEP 2: VERIFY OTP + REGISTER
+    // STEP 2: VERIFY CODE + REGISTER USER
     // ===============================
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request,
@@ -76,7 +79,11 @@ public class AuthController {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email not verified"));
 
-        if (!code.equals(user.getEmailVerificationCode())) {
+        if (user.isEmailVerified()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email already verified"));
+        }
+
+        if (!user.getEmailVerificationCode().equals(code)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Invalid verification code"));
         }
 
@@ -115,40 +122,49 @@ public class AuthController {
 
         if (!user.isEmailVerified()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Please verify email first"));
+                    .body(Map.of("error", "Please verify your email before login"));
         }
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getUsername(),
-                        request.getPassword()
-                )
-        );
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getUsername(),
+                            request.getPassword()
+                    )
+            );
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        String token = jwtUtil.generateToken(userDetails);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
+            String token = jwtUtil.generateToken(userDetails);
 
-        return ResponseEntity.ok(Map.of(
-                "token", token,
-                "type", "Bearer",
-                "username", user.getUsername(),
-                "email", user.getEmail(),
-                "roles", user.getRoles()
-        ));
+            return ResponseEntity.ok(Map.of(
+                    "token", token,
+                    "type", "Bearer",
+                    "username", user.getUsername(),
+                    "email", user.getEmail(),
+                    "roles", user.getRoles()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Invalid username or password"));
+        }
     }
 
     // ===============================
     // TOKEN VALIDATION
     // ===============================
     @GetMapping("/validate")
-    public ResponseEntity<?> validate(@RequestHeader("Authorization") String header) {
+    public ResponseEntity<?> validateToken(@RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            String username = jwtUtil.extractUsername(token);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-        String token = header.substring(7);
-        String username = jwtUtil.extractUsername(token);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            if (jwtUtil.validateToken(token, userDetails)) {
+                return ResponseEntity.ok(Map.of("valid", true, "username", username));
+            }
+        } catch (Exception ignored) {}
 
-        return jwtUtil.validateToken(token, userDetails)
-                ? ResponseEntity.ok(Map.of("valid", true))
-                : ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid", false));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("valid", false));
     }
 }

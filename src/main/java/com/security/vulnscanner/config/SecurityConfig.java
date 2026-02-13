@@ -38,39 +38,52 @@ public class SecurityConfig {
 
         http
                 .csrf(csrf -> csrf.disable())
+
+                // 🌍 CORS for frontend (Lovable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+
+                // 🔒 Stateless JWT
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
+
                 .authorizeHttpRequests(auth -> auth
 
-                        // 🔥 REQUIRED for browser & Lovable
+                        // 🔥 VERY IMPORTANT — allow browser preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 🔥 OTP + AUTH FLOW (NO JWT REQUIRED)
+                        // ✅ OPEN ALL AUTH ENDPOINTS (fixes your 403)
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Tools
+                        // Dev tools
                         .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
 
-                        // Everything else protected
+                        // 🔐 Everything else needs JWT
                         .anyRequest().authenticated()
                 )
+
                 .authenticationProvider(authenticationProvider())
+
+                // 🔑 JWT filter
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+
                 .headers(headers -> headers.frameOptions(frame -> frame.disable()));
 
         return http.build();
     }
 
+    /**
+     * 🌍 Global CORS Config
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+
+        config.setAllowedOriginPatterns(List.of("*")); // replace with frontend URL later
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(false);
+        config.setAllowCredentials(false); // using JWT header, not cookies
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
